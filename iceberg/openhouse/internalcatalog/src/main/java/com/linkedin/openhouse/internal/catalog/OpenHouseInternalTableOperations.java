@@ -42,6 +42,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BinaryOperator;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
@@ -313,12 +314,7 @@ public class OpenHouseInternalTableOperations extends BaseMetastoreTableOperatio
       abortIfWriterBaseDivergedFromCatalog(base, metadata);
 
       restoreOverriddenProperties(properties);
-      boolean bypassPolicy =
-          Boolean.parseBoolean(
-              properties.remove(CatalogConstants.COLUMN_DEFAULT_POLICY_BYPASS_KEY));
-      if (!bypassPolicy) {
-        validateColumnDefaultProperty(base, properties);
-      }
+      enforcePropertyRules(base, properties);
       // A rejected property change must not mark the unchanged table version as attempted.
       failIfRetryUpdate(properties);
 
@@ -544,24 +540,60 @@ public class OpenHouseInternalTableOperations extends BaseMetastoreTableOperatio
   }
 
   /**
-   * Check the properties that will actually be persisted, including on replacement and replication
-   * commits. A committed {@code true} cannot be changed or removed; {@code false} and an absent
-   * property remain mutable so a table can still opt in later. The column-default policy bypass
-   * skips this check. Compare against this commit's base so transaction retries cannot overwrite a
-   * value committed concurrently.
+   * Applies OpenHouse's table property rules to the properties a commit will persist. doCommit runs
+   * it on every commit path (create, replace, update, snapshot put, replication and rename),
+   * including paths that skip repository-level property checks. Each rule sees the value committed
+   * on {@code base} and the value this commit leaves, and returns the value to persist or rejects
+   * the commit with {@link UnsupportedClientOperationException}.
+   *
+   * <p>Runs after restoreOverriddenProperties, so rules see the values that will be persisted, and
+   * before failIfRetryUpdate, so a rejected commit does not mark its base version as attempted.
    */
-  private void validateColumnDefaultProperty(TableMetadata base, Map<String, String> properties) {
-    String key = CatalogConstants.COLUMN_DEFAULT_ENABLED_TABLE_PROP;
+  private void enforcePropertyRules(TableMetadata base, Map<String, String> properties) {
+    // The column-default policy bypass is a commit-only signal: remove it so it is never
+    // persisted, and skip the opt-in lock when it is set.
+    if (!Boolean.parseBoolean(
+        properties.remove(CatalogConstants.COLUMN_DEFAULT_POLICY_BYPASS_KEY))) {
+      enforcePropertyRule(
+          base,
+          properties,
+          CatalogConstants.COLUMN_DEFAULT_ENABLED_TABLE_PROP,
+          this::keepColumnDefaultOptIn);
+    }
+  }
+
+  /**
+   * Sets {@code key} to {@code rule.apply(committed, requested)}, where either argument is null
+   * when the property is absent; a null result removes the key.
+   */
+  private static void enforcePropertyRule(
+      TableMetadata base, Map<String, String> properties, String key, BinaryOperator<String> rule) {
     String committed = base == null ? null : base.properties().get(key);
-    if (isColumnDefaultOptedIn(committed) && !committed.equals(properties.get(key))) {
+    String persisted = rule.apply(committed, properties.get(key));
+    if (persisted == null) {
+      properties.remove(key);
+    } else {
+      properties.put(key, persisted);
+    }
+  }
+
+  /**
+   * Keeps {@link CatalogConstants#COLUMN_DEFAULT_ENABLED_TABLE_PROP} once committed as {@code
+   * true}: it cannot be changed or removed. {@code false}, an invalid value and an absent property
+   * remain mutable so a table can still opt in later. Comparing with this commit's base keeps
+   * transaction retries from overwriting a value committed concurrently.
+   */
+  private String keepColumnDefaultOptIn(String committed, String requested) {
+    if (isColumnDefaultOptedIn(committed) && !committed.equals(requested)) {
       throw new UnsupportedClientOperationException(
           UnsupportedClientOperationException.Operation.ALTER_RESERVED_TBLPROPS,
           String.format(
               "Table property %s is immutable once set to true on table %s; cannot change or remove"
                   + " it. To override, set dangerously-bypass-column-default-policy=true on the"
                   + " client catalog.",
-              key, tableIdentifier));
+              CatalogConstants.COLUMN_DEFAULT_ENABLED_TABLE_PROP, tableIdentifier));
     }
+    return requested;
   }
 
   private static boolean isColumnDefaultOptedIn(String value) {
