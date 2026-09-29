@@ -414,10 +414,11 @@ version. New version stamping is not part of this gate.
 
 The default-off escape hatch is
 `spark.sql.catalog.openhouse.dangerously-bypass-column-default-policy=true` (or the same suffix in
-Java catalog properties). It bypasses only column-default policy checks, currently client
-compatibility; incorrect reads or writes may result. Authentication, authorization, default
-resolution and default-value write protections still apply. Old JARs without this parameter need
-an upgrade/backport to use it. Removing table opt-in in a write is not a bypass.
+Java catalog properties). It bypasses only column-default policy checks: client compatibility and
+the rule that a committed `read-bridge.column-default.enabled=true` cannot be changed or removed.
+Incorrect reads or writes may result. Authentication, authorization, default resolution and
+default-value write protections still apply. Old JARs without this parameter need an
+upgrade/backport to use it. Removing table opt-in in a write is not a bypass.
 Administrative operations, cached metadata and direct storage access are unchanged.
 
 #### SET POLICY

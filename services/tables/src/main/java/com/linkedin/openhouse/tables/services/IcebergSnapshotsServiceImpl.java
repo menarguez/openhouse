@@ -96,6 +96,11 @@ public class IcebergSnapshotsServiceImpl implements IcebergSnapshotsService {
     } catch (ColumnDefaultException e) {
       throw e.toUnsupportedClient();
     }
+    tableDtoToSave =
+        tableDtoToSave
+            .toBuilder()
+            .columnDefaultPolicyBypass(ColumnDefaultClientGate.policyBypassRequested())
+            .build();
     try {
       return Pair.of(openHouseInternalRepository.save(tableDtoToSave), !tableDto.isPresent());
     } catch (BadRequestException e) {

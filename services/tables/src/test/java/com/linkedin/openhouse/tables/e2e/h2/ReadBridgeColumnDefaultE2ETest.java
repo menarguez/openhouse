@@ -4,6 +4,7 @@ import static com.linkedin.openhouse.tables.model.TableModelConstants.CLUSTER_NA
 import static com.linkedin.openhouse.tables.model.TableModelConstants.GET_TABLE_RESPONSE_BODY;
 import static com.linkedin.openhouse.tables.model.TableModelConstants.buildCreateUpdateTableRequestBody;
 import static com.linkedin.openhouse.tables.model.TableModelConstants.buildGetTableResponseBody;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -290,6 +291,40 @@ public class ReadBridgeColumnDefaultE2ETest {
                 .header("X-OpenHouse-Dangerously-Bypass-Column-Default-Policy", "true"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.tableProperties['user.override']", is("accepted")));
+  }
+
+  @Test
+  public void policyBypassAllowsDisablingCommittedOptIn() throws Exception {
+    created = create(uniqueTable("disable"), Collections.singletonMap(ENABLED_PROP, "true"));
+    MvcResult initial = createTable();
+    CreateUpdateTableRequestBody update =
+        buildCreateUpdateTableRequestBody(buildGetTableResponseBody(initial));
+    Map<String, String> properties = new HashMap<>(update.getTableProperties());
+    properties.put(ENABLED_PROP, "false");
+    String body = update.toBuilder().tableProperties(properties).build().toJson();
+    String path = "/v1/databases/" + created.getDatabaseId() + "/tables/" + created.getTableId();
+    mvc.perform(
+            MockMvcRequestBuilders.put(path)
+                .header("X-Client-Name", "spark")
+                .header("User-Agent", "openhouse-java-client/0.5.100")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(
+            jsonPath("$.message", containsString("dangerously-bypass-column-default-policy")));
+    mvc.perform(
+            MockMvcRequestBuilders.put(path)
+                .header("X-OpenHouse-Dangerously-Bypass-Column-Default-Policy", "true")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.tableProperties['" + ENABLED_PROP + "']", is("false")));
+    getTable()
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.tableProperties['" + ENABLED_PROP + "']", is("false")))
+        .andExpect(
+            jsonPath("$.tableProperties['openhouse.columnDefaultPolicyBypass']").doesNotExist())
+        .andExpect(jsonPath("$.config['" + CONFIG_KEY + "']").doesNotExist());
   }
 
   private MvcResult createTable() throws Exception {

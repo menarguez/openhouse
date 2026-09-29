@@ -188,7 +188,12 @@ public class TablesServiceImpl implements TablesService {
     } catch (ColumnDefaultException e) {
       throw e.toUnsupportedClient();
     }
-    return saveTableDto(tableDtoToSave, tableDto);
+    return saveTableDto(
+        tableDtoToSave
+            .toBuilder()
+            .columnDefaultPolicyBypass(ColumnDefaultClientGate.policyBypassRequested())
+            .build(),
+        tableDto);
   }
 
   private Pair<TableDto, Boolean> saveTableDto(

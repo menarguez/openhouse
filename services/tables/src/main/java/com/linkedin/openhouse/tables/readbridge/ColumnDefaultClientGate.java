@@ -30,15 +30,11 @@ public class ColumnDefaultClientGate {
     if (!enabled(existing == null ? null : existing.getTableProperties()) && !enabled(proposed)) {
       return;
     }
-    Object context = RequestContextHolder.getRequestAttributes();
-    HttpServletRequest request =
-        context instanceof ServletRequestAttributes
-            ? ((ServletRequestAttributes) context).getRequest()
-            : null;
+    if (policyBypassRequested()) {
+      return;
+    }
+    HttpServletRequest request = currentRequest();
     if (request != null) {
-      if ("true".equalsIgnoreCase(request.getHeader(OVERRIDE))) {
-        return;
-      }
       String userAgent = request.getHeader("User-Agent");
       if (minimumVersion != null
           && "spark".equals(request.getHeader("X-Client-Name"))
@@ -61,6 +57,19 @@ public class ColumnDefaultClientGate {
             + "To bypass column-default policy checks, set "
             + "dangerously-bypass-column-default-policy=true; "
             + "incorrect reads or writes may result.");
+  }
+
+  /** Whether this HTTP request carries the client catalog's column-default policy bypass. */
+  public static boolean policyBypassRequested() {
+    HttpServletRequest request = currentRequest();
+    return request != null && "true".equalsIgnoreCase(request.getHeader(OVERRIDE));
+  }
+
+  private static HttpServletRequest currentRequest() {
+    Object context = RequestContextHolder.getRequestAttributes();
+    return context instanceof ServletRequestAttributes
+        ? ((ServletRequestAttributes) context).getRequest()
+        : null;
   }
 
   private static boolean enabled(Map<String, String> properties) {

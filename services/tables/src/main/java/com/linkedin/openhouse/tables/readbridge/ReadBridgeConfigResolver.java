@@ -119,8 +119,9 @@ public class ReadBridgeConfigResolver {
    * Uses {@link TableFeatureToggle#isFeatureActivatedWithOverride} so {@code
    * read-bridge.column-default.enabled} can opt in/out without HTS. GET fail-opens on lookup
    * errors: not bridging equals today's NULL reads. The write path fail-closes instead. The table
-   * property may be set at creation or on an existing table. A committed {@code true} is immutable;
-   * {@code false} and an absent property remain changeable, and absence still follows the ramp.
+   * property may be set at creation or on an existing table. A committed {@code true} is immutable
+   * unless the client sends the column-default policy bypass; {@code false} and an absent property
+   * remain changeable, and absence still follows the ramp.
    */
   private boolean isColumnDefaultRamped(TableDto tableDto) {
     if (columnDefaultsSource == ColumnDefaultsSource.NONE) {

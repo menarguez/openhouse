@@ -266,6 +266,39 @@ public class OpenHouseInternalTableOperationsTest {
     }
   }
 
+  @ParameterizedTest
+  @CsvSource(
+      value = {"true,false", "true,absent", "false,false", "invalid,false"},
+      nullValues = "absent")
+  void testColumnDefaultPolicyBypassSignalIsExplicitAndNeverPersisted(
+      String signal, String proposed) {
+    TableMetadata base =
+        BASE_TABLE_METADATA.replaceProperties(Map.of(COLUMN_DEFAULT_PROPERTY, "true"));
+    Map<String, String> properties = new HashMap<>();
+    properties.put(CatalogConstants.COLUMN_DEFAULT_POLICY_BYPASS_KEY, signal);
+    if (proposed != null) {
+      properties.put(COLUMN_DEFAULT_PROPERTY, proposed);
+    }
+    TableMetadata updated = BASE_TABLE_METADATA.replaceProperties(properties);
+
+    try (MockedStatic<TableMetadataParser> metadataFiles = mockStatic(TableMetadataParser.class)) {
+      if (!"true".equals(signal)) {
+        Assertions.assertThrows(
+            UnsupportedClientOperationException.class,
+            () -> openHouseInternalTableOperations.doCommit(base, updated));
+        verifyNoInteractions(mockHouseTableRepository);
+        return;
+      }
+      openHouseInternalTableOperations.doCommit(base, updated);
+      verify(mockHouseTableMapper).toHouseTable(tblMetadataCaptor.capture(), any());
+      Map<String, String> persisted = tblMetadataCaptor.getValue().properties();
+      Assertions.assertEquals(proposed, persisted.get(COLUMN_DEFAULT_PROPERTY));
+      Assertions.assertFalse(
+          persisted.containsKey(CatalogConstants.COLUMN_DEFAULT_POLICY_BYPASS_KEY));
+      verify(mockHouseTableRepository).save(mockHouseTable);
+    }
+  }
+
   /**
    * Tests committing snapshots to a table with no existing snapshots (initial version). Verifies
    * that all snapshots are appended to the table metadata.

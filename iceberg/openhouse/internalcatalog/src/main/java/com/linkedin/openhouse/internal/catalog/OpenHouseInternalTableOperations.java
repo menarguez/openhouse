@@ -313,7 +313,12 @@ public class OpenHouseInternalTableOperations extends BaseMetastoreTableOperatio
       abortIfWriterBaseDivergedFromCatalog(base, metadata);
 
       restoreOverriddenProperties(properties);
-      validateColumnDefaultProperty(base, properties);
+      boolean bypassPolicy =
+          Boolean.parseBoolean(
+              properties.remove(CatalogConstants.COLUMN_DEFAULT_POLICY_BYPASS_KEY));
+      if (!bypassPolicy) {
+        validateColumnDefaultProperty(base, properties);
+      }
       // A rejected property change must not mark the unchanged table version as attempted.
       failIfRetryUpdate(properties);
 
@@ -541,8 +546,9 @@ public class OpenHouseInternalTableOperations extends BaseMetastoreTableOperatio
   /**
    * Check the properties that will actually be persisted, including on replacement and replication
    * commits. A committed {@code true} cannot be changed or removed; {@code false} and an absent
-   * property remain mutable so a table can still opt in later. Compare against this commit's base
-   * so transaction retries cannot overwrite a value committed concurrently.
+   * property remain mutable so a table can still opt in later. The column-default policy bypass
+   * skips this check. Compare against this commit's base so transaction retries cannot overwrite a
+   * value committed concurrently.
    */
   private void validateColumnDefaultProperty(TableMetadata base, Map<String, String> properties) {
     String key = CatalogConstants.COLUMN_DEFAULT_ENABLED_TABLE_PROP;
@@ -552,7 +558,8 @@ public class OpenHouseInternalTableOperations extends BaseMetastoreTableOperatio
           UnsupportedClientOperationException.Operation.ALTER_RESERVED_TBLPROPS,
           String.format(
               "Table property %s is immutable once set to true on table %s; cannot change or remove"
-                  + " it.",
+                  + " it. To override, set dangerously-bypass-column-default-policy=true on the"
+                  + " client catalog.",
               key, tableIdentifier));
     }
   }

@@ -276,6 +276,62 @@ public class RepositoryTest {
   }
 
   @ParameterizedTest
+  @CsvSource(
+      value = {"update,true", "replace,true", "stageReplace,true", "update,false", "replace,false"})
+  void testOnlyRequestFlagBypassesColumnDefaultImmutability(String operation, boolean flag) {
+    String property = CatalogConstants.COLUMN_DEFAULT_ENABLED_TABLE_PROP;
+    String signal = CatalogConstants.COLUMN_DEFAULT_POLICY_BYPASS_KEY;
+    TableDto created =
+        openHouseInternalRepository.save(
+            TABLE_DTO
+                .toBuilder()
+                .tableId("columnDefaultBypass" + operation + flag)
+                .tableVersion(INITIAL_TABLE_VERSION)
+                .policies(null)
+                .tableProperties(
+                    Map.of(property, "true", CatalogConstants.RTAS_ENABLED_TABLE_PROP, "true"))
+                .build());
+    TableDtoPrimaryKey key = getPrimaryKey(created);
+    try {
+      Map<String, String> changed = new HashMap<>(created.getTableProperties());
+      changed.put(property, "false");
+      // A client must not be able to request the bypass through ordinary table properties.
+      if (!flag) {
+        changed.put(signal, "true");
+      }
+      TableDto request =
+          created
+              .toBuilder()
+              .tableVersion(created.getTableLocation())
+              .tableProperties(changed)
+              .replaceCommit("replace".equals(operation))
+              .stageReplace("stageReplace".equals(operation))
+              .columnDefaultPolicyBypass(flag)
+              .build();
+      if (!flag) {
+        Assertions.assertThrows(
+            UnsupportedClientOperationException.class,
+            () -> openHouseInternalRepository.save(request));
+        Assertions.assertEquals(
+            "true",
+            openHouseInternalRepository.findById(key).get().getTableProperties().get(property));
+        return;
+      }
+      TableDto updated = openHouseInternalRepository.save(request);
+      Assertions.assertEquals("false", updated.getTableProperties().get(property));
+      Assertions.assertFalse(updated.getTableProperties().containsKey(signal));
+      if (!"stageReplace".equals(operation)) {
+        Map<String, String> persisted =
+            openHouseInternalRepository.findById(key).get().getTableProperties();
+        Assertions.assertEquals("false", persisted.get(property));
+        Assertions.assertFalse(persisted.containsKey(signal));
+      }
+    } finally {
+      openHouseInternalRepository.deleteById(key);
+    }
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"true", "false"})
   void testReplacePreservesCommittedColumnDefaultProperty(String value) {
     String property = CatalogConstants.COLUMN_DEFAULT_ENABLED_TABLE_PROP;
