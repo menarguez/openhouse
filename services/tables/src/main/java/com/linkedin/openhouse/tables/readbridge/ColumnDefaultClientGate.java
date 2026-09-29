@@ -14,7 +14,7 @@ public class ColumnDefaultClientGate {
   private static final String ENABLED =
       ReadBridgeConfigResolver.COLUMN_DEFAULT_FEATURE_ID + ".enabled";
   private static final String PRODUCT = "openhouse-java-client/";
-  private static final String OVERRIDE = "X-OpenHouse-Dangerously-Skip-Minimum-Client-Jar-Check";
+  private static final String OVERRIDE = "X-OpenHouse-Dangerously-Bypass-Column-Default-Policy";
   private static final Pattern RELEASE = Pattern.compile("[0-9]{1,9}(?:\\.[0-9]{1,9}){2,3}");
   private final String minimum;
   private final Version minimumVersion;
@@ -58,7 +58,8 @@ public class ColumnDefaultClientGate {
             + minimum
             + " or newer in the same major release family. Configure "
             + "cluster.read-bridge.column-default.minimum-client-version and use a compatible client. "
-            + "To bypass ONLY this check, set dangerously-skip-minimum-client-jar-check=true; "
+            + "To bypass column-default policy checks, set "
+            + "dangerously-bypass-column-default-policy=true; "
             + "incorrect reads or writes may result.");
   }
 

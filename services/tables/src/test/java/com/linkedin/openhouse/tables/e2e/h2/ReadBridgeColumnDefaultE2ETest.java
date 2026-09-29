@@ -227,12 +227,12 @@ public class ReadBridgeColumnDefaultE2ETest {
     mvc.perform(MockMvcRequestBuilders.get(path)).andExpect(status().isUnprocessableEntity());
     mvc.perform(
             MockMvcRequestBuilders.get(path)
-                .header("X-OpenHouse-Dangerously-Skip-Minimum-Client-Jar-Check", "true"))
+                .header("X-OpenHouse-Dangerously-Bypass-Column-Default-Policy", "true"))
         .andExpect(status().isOk());
     mvc.perform(
             MockMvcRequestBuilders.get(path)
                 .header("Authorization", "")
-                .header("X-OpenHouse-Dangerously-Skip-Minimum-Client-Jar-Check", "true"))
+                .header("X-OpenHouse-Dangerously-Bypass-Column-Default-Policy", "true"))
         .andExpect(status().isUnauthorized());
     mvc.perform(
             MockMvcRequestBuilders.post("/v2/databases/d1/tables/search")
@@ -287,7 +287,7 @@ public class ReadBridgeColumnDefaultE2ETest {
             MockMvcRequestBuilders.put(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(update.toBuilder().tableProperties(properties).build().toJson())
-                .header("X-OpenHouse-Dangerously-Skip-Minimum-Client-Jar-Check", "true"))
+                .header("X-OpenHouse-Dangerously-Bypass-Column-Default-Policy", "true"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.tableProperties['user.override']", is("accepted")));
   }

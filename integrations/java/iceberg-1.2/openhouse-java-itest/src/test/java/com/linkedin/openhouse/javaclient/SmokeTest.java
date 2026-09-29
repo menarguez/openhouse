@@ -142,8 +142,8 @@ public class SmokeTest {
 
   @Test
   public void testDangerousOverrideIsExplicitAndCatalogScoped() throws InterruptedException {
-    String property = "dangerously-skip-minimum-client-jar-check";
-    String header = "X-OpenHouse-Dangerously-Skip-Minimum-Client-Jar-Check";
+    String property = "dangerously-bypass-column-default-policy";
+    String header = "X-OpenHouse-Dangerously-Bypass-Column-Default-Policy";
     OpenHouseCatalog unsafe = new OpenHouseCatalog();
     unsafe.initialize("unsafe", ImmutableMap.of(CatalogProperties.URI, url, property, "true"));
     OpenHouseCatalog safe = new OpenHouseCatalog();
